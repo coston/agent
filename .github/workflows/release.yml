@@ -8,6 +8,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write # npm trusted publishing (OIDC)
 
 jobs:
   release:
@@ -19,13 +20,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # semantic-release 25 / @semantic-release/npm 13 require Node >=22.14
           cache: npm
       - run: npm ci
       - run: npm run type-check
       - run: npm test
-      # Build before semantic-release so @semantic-release/git commits fresh dist.
+      # Build before semantic-release so the published npm tarball ships fresh dist.
       - run: npm run build
       - run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: false # trusted publishing handles auth; provenance off (flip to true to attest)

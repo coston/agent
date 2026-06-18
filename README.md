@@ -1,9 +1,20 @@
 # @coston/agent
 
+[![npm](https://img.shields.io/npm/v/@coston/agent)](https://www.npmjs.com/package/@coston/agent)
+[![Release](https://github.com/coston/agent/actions/workflows/release.yml/badge.svg)](https://github.com/coston/agent/actions/workflows/release.yml)
+
 Reusable, standards-first agent-chat for app-scoped LLM copilots. A thin wiring
 layer over the [Vercel AI SDK](https://ai-sdk.dev) and
 [MCP](https://modelcontextprotocol.io) — not a framework. Each app keeps its own
 agent, scoped to its own API; this package removes the copy-paste.
+
+- [Why](#why)
+- [Subpath exports](#subpath-exports)
+- [Install](#install)
+- [Releases](#releases)
+- [`@coston/agent/server` — chat route](#costonagentserver--chat-route)
+- [Develop](#develop)
+- **Adopting in a new app? → [USAGE.md](./USAGE.md)** · **Design rationale → [ARCHITECTURE.md](./ARCHITECTURE.md)**
 
 ## Why
 
@@ -24,33 +35,39 @@ system prompt, auth, and persistence.
 
 Server, persistence, and mcp are server-only; only `react` ships to the browser.
 
+The model registry and provider-label helpers (`MODELS_BY_PROVIDER`,
+`DEFAULT_MODEL`, `providerNeedsKey`, `providerDisplayName`, `shortModelName`, …)
+are re-exported from both `/server` and `/react` for building settings UIs; the
+exported types are the reference.
+
 **Adopting in a new app?** See **[USAGE.md](./USAGE.md)** — a complete, generic
 recipe (prerequisites, the required data model, and wiring all four subpaths).
 
-## Install (from git)
+## Install
 
-Distributed via this **git repo**, versioned with SemVer tags. Consumers pin a
-SemVer range against the tags:
-
-```jsonc
-// package.json
-"dependencies": {
-  "@coston/agent": "git+https://github.com/coston/agent.git#semver:^0.2.0"
-}
+```bash
+npm install @coston/agent
 ```
 
-`dist/` is committed at each tagged release, so `npm install` pulls **prebuilt**
-output — no build step on the consumer side. Peer deps (`ai`, `@ai-sdk/*`,
-`react`, `@coston/ui`, `mcp-handler`, …) resolve from the consuming app. Requires
-`@coston/ui >= 0.3.0`.
+**Requires Node >=20.** Peer deps resolve from the consuming app, and most are
+optional — pulled only by the subpath that uses them. Always required: `ai`,
+`@ai-sdk/anthropic`, `@ai-sdk/openai`. Optional, by subpath: `@ai-sdk/react`,
+`react`, `react-dom`, `@coston/ui` (`>=0.3.0 <0.5.0`), `lucide-react`,
+`streamdown` for `/react`; `mcp-handler`, `@modelcontextprotocol/sdk` for `/mcp`;
+`@ai-sdk/openai-compatible` for the browser local transport. See
+[USAGE.md](./USAGE.md) §1 for the exact set.
 
 ## Releases
 
-Automated by **semantic-release** (git-only — `npmPublish: false`). On push to
-`main`, the GitHub Actions workflow type-checks, tests, builds, bumps the SemVer
-version from the Conventional-Commit history, commits the rebuilt `dist`, tags
-`vX.Y.Z`, and cuts a GitHub Release. Nothing is published to npm. Use
+Automated by **semantic-release**. On push to `main`, the GitHub Actions workflow
+type-checks, tests, builds, bumps the SemVer version from the Conventional-Commit
+history, **publishes to npm**, tags `vX.Y.Z`, and cuts a GitHub Release. Use
 `fix:` / `feat:` / `feat!:` commit prefixes to drive patch / minor / major bumps.
+(`dist/` is a build artifact — rebuilt in CI and shipped in the npm tarball, not
+committed to git.)
+
+The [GitHub Releases](https://github.com/coston/agent/releases) page is the
+changelog — each release lists the changes generated from the commit history.
 
 ## `@coston/agent/server` — chat route
 
@@ -92,7 +109,7 @@ import instructions from './agent/instructions.md'; // app loads the markdown
 
 const agent = defineAgent({
   instructions, // Markdown
-  tools: buildAppTools(ctx),
+  tools: ctx => buildAppTools(ctx), // standard AI SDK ToolSet (or a plain ToolSet)
   skills: [{ name: 'example', description: 'When this applies', content: exampleMd }],
   approvals: ['delete_item'], // → AI SDK needsApproval; UI renders Approve/Deny
   context: ctx => snapshot(ctx),

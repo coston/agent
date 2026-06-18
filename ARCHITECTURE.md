@@ -10,14 +10,17 @@ MCP. Each factory takes/returns standard types:
 - Messages → `UIMessage`, stored verbatim (`parts`).
 - Transport → `ChatTransport` (`DefaultChatTransport`; the local plugin is the
   same interface).
-- Streaming → `streamText` + `toUIMessageStreamResponse` + `useChat`.
+- Streaming → `streamText` + `toUIMessageStreamResponse` (wired inside
+  `createChatRoute`) + `useChat` from `@ai-sdk/react` on the client.
 - Providers → `createAnthropic`/`createOpenAI`/`createOpenAICompatible` + the
   Gateway `provider/model` string; `buildModel` returns a `LanguageModel`.
 - MCP → `mcp-handler` (server) and `experimental_createMCPClient` (future
   federation client).
 
 The **only** bespoke interface is `PersistenceAdapter`, because the SDK does not
-standardize chat storage. It still stores standard `UIMessage` parts.
+standardize chat storage. It still stores standard `UIMessage` parts. Its
+contract (and a custom, non-Prisma implementation) is in
+[USAGE.md → Custom store](./USAGE.md#3-provider-resolution--persistence-server).
 
 ## Layout
 
@@ -36,7 +39,9 @@ src/
 
 `tsdown` builds with `unbundle: true`, mirroring `src/ → dist/` with stable,
 un-hashed names. Peer deps (`ai`, `@ai-sdk/*`, `react`, `@coston/ui`,
-`mcp-handler`, `@prisma/client`) are externalized.
+`mcp-handler`) are externalized. Persistence is **structural** over the app's
+Prisma client (duck-typed delegates), so the package takes no Prisma dependency
+at all.
 
 ## The hard seams (one module, different app shapes)
 
