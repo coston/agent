@@ -1,0 +1,154 @@
+{
+  "name": "@coston/agent",
+  "version": "0.2.0",
+  "description": "Reusable, standards-first agent-chat module — a thin wiring layer over the Vercel AI SDK and MCP for building app-scoped LLM copilots.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    },
+    "./persistence": {
+      "types": "./dist/persistence.d.ts",
+      "default": "./dist/persistence.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "type-check": "tsc --noEmit",
+    "release": "semantic-release",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "peerDependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai-compatible": "^2.0.0",
+    "@ai-sdk/react": "^3.0.0",
+    "@coston/ui": ">=0.3.0 <0.5.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ai": "^6.0.0",
+    "lucide-react": "^1.0.0",
+    "mcp-handler": "^1.0.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "streamdown": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/openai-compatible": {
+      "optional": true
+    },
+    "@ai-sdk/react": {
+      "optional": true
+    },
+    "@coston/ui": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "lucide-react": {
+      "optional": true
+    },
+    "mcp-handler": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "streamdown": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.6.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.84",
+    "@ai-sdk/openai": "^3.0.71",
+    "@ai-sdk/openai-compatible": "^2.0.50",
+    "@ai-sdk/react": "^3.0.206",
+    "@coston/ui": "^0.3.0",
+    "@eslint/js": "^9.39.4",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "ai": "^6.0.204",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "jsdom": "^26.1.0",
+    "lucide-react": "^1.8.0",
+    "mcp-handler": "^1.1.0",
+    "prettier": "^3.8.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "semantic-release": "^24.2.0",
+    "@semantic-release/git": "^10.0.1",
+    "streamdown": "^2.5.0",
+    "tsdown": "^0.12.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.8"
+  },
+  "prettier": {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 100,
+    "tabWidth": 2,
+    "useTabs": false,
+    "arrowParens": "avoid",
+    "endOfLine": "lf"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "chat",
+    "copilot",
+    "vercel-ai-sdk",
+    "mcp",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coston/agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/coston/agent/issues"
+  },
+  "author": "coston",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
