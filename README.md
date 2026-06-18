@@ -14,7 +14,8 @@ agent, scoped to its own API; this package removes the copy-paste.
 - [Releases](#releases)
 - [`@coston/agent/server` — chat route](#costonagentserver--chat-route)
 - [Develop](#develop)
-- **Adopting in a new app? → [USAGE.md](./USAGE.md)** · **Design rationale → [ARCHITECTURE.md](./ARCHITECTURE.md)**
+- **Adopting in a new app?** → [USAGE.md](./USAGE.md)
+- **Design rationale** → [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ## Why
 
