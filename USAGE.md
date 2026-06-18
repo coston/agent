@@ -63,14 +63,15 @@ model AiProviderSetting {
 }
 
 model Conversation {
-  id        String   @id @default(cuid())
-  userId    String
-  notebookId String  // your partition column (a workspace / document / project id)
-  title     String   @default("New chat")
-  renamed   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  messages  ChatMessage[]
+  id         String   @id @default(cuid())
+  userId     String
+  notebookId String   // your partition column (a workspace / document / project id)
+  title      String   @default("New chat")
+  renamed    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  messages   ChatMessage[]
+
   @@index([notebookId, userId, updatedAt])
 }
 
@@ -114,27 +115,21 @@ export const persistence = createPrismaPersistence({
 **Custom store (no Prisma).** `PersistenceAdapter` is the package's only bespoke
 interface — implement it directly for raw SQL, RLS, or any other store. It is one
 interface backing the chat route's `saveMessages`, the session server actions
-(§6), and the UI switcher. The nine methods (`dist/persistence.d.ts` /
-`src/persistence/types.ts` is the source of truth):
+(§6), and the UI switcher. Implement its nine methods against your store
+(`scope` is `{ userId, partitionId? }` throughout — apply your ownership check in
+each; `src/persistence/types.ts` has the exact signatures):
 
-```ts
-import type { PersistenceAdapter } from '@coston/agent/persistence';
+- `listSessions(scope)` — a partition's sessions for this user, newest-active first
+- `createSession(scope)` — start a session, reusing an untouched empty one
+- `getOrCreateActiveSession(scope)` — the most-recent session, creating one if none
+- `renameSession(id, scope, title)` — rename, marking it manually renamed
+- `deleteSession(id, scope)` — delete a session the user owns
+- `pruneEmptySessions(scope)` — sweep abandoned empties, always keeping ≥1
+- `loadMessages(id, scope)` — replay oldest-first in the `useChat` shape
+- `saveMessages(id, scope, messages)` — replace with a settled turn
+- `assertOwnership(id, scope)` — throw unless the session is owned within scope
 
-export const persistence: PersistenceAdapter = {
-  listSessions: scope => /* a partition's sessions for this user, newest first */,
-  createSession: scope => /* start a session (reuse an untouched empty one) */,
-  getOrCreateActiveSession: scope => /* most-recent session, create if none */,
-  renameSession: (id, scope, title) => /* rename + mark manually renamed */,
-  deleteSession: (id, scope) => /* delete a session the user owns */,
-  pruneEmptySessions: scope => /* sweep abandoned empties, keep ≥1 */,
-  loadMessages: (id, scope) => /* replay oldest-first in the useChat shape */,
-  saveMessages: (id, scope, messages) => /* replace with a settled turn */,
-  assertOwnership: (id, scope) => /* throw unless owned within scope */,
-};
-```
-
-`scope` is `{ userId, partitionId? }` — apply your ownership check in every
-method. Messages are stored verbatim as AI SDK `UIMessage` parts.
+Messages are stored verbatim as AI SDK `UIMessage` parts.
 
 ### Provider settings UI (`ProviderForm`)
 
@@ -146,11 +141,11 @@ package never sees a plaintext key after submission:
 ```tsx
 // app/settings/provider-settings.tsx
 'use client';
-import { ProviderForm } from '@coston/agent/react';
+import { ProviderForm, type ProviderSetting } from '@coston/agent/react';
 import { saveProvider } from '@/actions/provider';
 import { toast } from 'sonner';
 
-export function ProviderSettings({ initial }: { initial: import('@coston/agent/react').ProviderSetting }) {
+export function ProviderSettings({ initial }: { initial: ProviderSetting }) {
   return <ProviderForm initial={initial} onSave={saveProvider} onError={m => toast.error(m)} />;
 }
 ```
@@ -163,7 +158,10 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 
 export async function saveProvider(input: {
-  provider: ProviderType; model: string; apiKey?: string; baseUrl?: string;
+  provider: ProviderType;
+  model: string;
+  apiKey?: string;
+  baseUrl?: string;
 }) {
   const session = await auth();
   if (!session?.user?.id) throw new Error('Unauthorized');
@@ -192,14 +190,18 @@ Two ways to supply tools + prompt: inline, or via `defineAgent` (recommended —
 adds Markdown instructions + Skills + approval gates).
 
 ```ts
-import { createChatRoute } from '@coston/agent/server';
-import { defineAgent } from '@coston/agent/server';
+import { createChatRoute, defineAgent } from '@coston/agent/server';
+import type { UIMessage } from 'ai';
 import { auth } from '@/lib/auth';
 import { resolveUserModel, persistence } from '@/lib/agent';
 import { buildNoteTools } from '@/lib/note-tools';
 import instructions from '@/agent/instructions.md'; // app loads the markdown
 
-interface Body { messages: import('ai').UIMessage[]; conversationId: string; notebookId: string }
+interface Body {
+  messages: UIMessage[];
+  conversationId: string;
+  notebookId: string;
+}
 
 const agent = defineAgent<{ userId: string; notebookId: string }>({
   instructions,
@@ -244,8 +246,10 @@ export const { GET, POST, DELETE } = createMcpRoute({
   serverInfo: { name: 'notes', version: '1.0.0' },
   verifyToken,
   registerTools: server => {
-    server.tool('list_notes', 'List your notes', {}, scoped('notes:read', async (_a, { userId }) =>
-      mcpText(/* ... */ '')));
+    server.tool('list_notes', 'List your notes', {}, scoped('notes:read', async (_args, { userId }) => {
+      // ...load this user's notes from your store...
+      return mcpText('your notes…');
+    }));
   },
 });
 ```
@@ -289,7 +293,13 @@ import { ChatPanel, ChatSession } from '@coston/agent/react';
 import { toast } from 'sonner';
 import { createConvo, renameConvo, deleteConvo, loadConvo } from '@/actions/conversations';
 
-export function NotesCopilot({ notebookId, conversations, activeConversationId, initialMessages, providerReady }) {
+export function NotesCopilot({
+  notebookId,
+  conversations,
+  activeConversationId,
+  initialMessages,
+  providerReady,
+}) {
   return (
     <ChatPanel
       partitionId={notebookId}
