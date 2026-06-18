@@ -85,10 +85,6 @@
       "optional": true
     }
   },
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.6.0"
-  },
   "devDependencies": {
     "@ai-sdk/anthropic": "^3.0.84",
     "@ai-sdk/openai": "^3.0.71",

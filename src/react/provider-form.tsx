@@ -3,7 +3,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '@coston/ui/button';
 import { Input } from '@coston/ui/input';
-import { cn } from './cn';
 import {
   DEFAULT_MODEL,
   LOCAL_BASE_URL_HINTS,
@@ -155,9 +154,7 @@ export function ProviderForm({
                 key={h.url}
                 type="button"
                 onClick={() => setBaseUrl(h.url)}
-                className={cn(
-                  'rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground'
-                )}
+                className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 {h.label}
               </button>

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildModel, createProviderResolver, ProviderError } from './provider';
+import { buildModel, createProviderResolver } from './provider';
+import { ProviderError } from './errors';
 
 describe('buildModel', () => {
   const env = process.env;

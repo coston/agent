@@ -4,13 +4,10 @@ import type { LanguageModel } from 'ai';
 import type { ProviderType } from '../shared/provider-types';
 import { ProviderError } from './errors';
 
-export { ProviderError } from './errors';
-
 export interface ResolvedProviderConfig {
   provider: ProviderType;
   model: string;
   apiKey?: string;
-  baseUrl?: string | null;
 }
 
 /** User-facing strings shown when a provider can't be constructed. */
@@ -101,7 +98,6 @@ export function createProviderResolver(options: CreateProviderResolverOptions): 
         provider: (row?.provider as ProviderType) ?? defaultProvider,
         model: row?.model ?? defaultModel,
         apiKey: row?.apiKeyCiphertext ? options.decrypt(row.apiKeyCiphertext) : undefined,
-        baseUrl: row?.baseUrl,
       },
       options.messages
     );
