@@ -12,10 +12,13 @@ export {
   ChatSession,
   type AddToolOutput,
   type AgentToolCall,
+  type ChatAttachment,
   type ChatSessionProps,
   type SettledTurn,
   type ToolCallHandler,
+  type UploadAttachment,
 } from './react/chat-session';
+export { CameraDialog, type CameraDialogProps } from './react/camera-dialog';
 export {
   ChatPanel,
   type CachedMessage,

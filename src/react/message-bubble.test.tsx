@@ -9,6 +9,14 @@ vi.mock('streamdown', () => ({
   Streamdown: ({ children }: { children: ReactNode }) => <div data-testid="md">{children}</div>,
 }));
 
+// Render the dialog children inline so the enlarged image is queryable.
+vi.mock('@coston/ui/dialog', () => ({
+  Dialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+
 describe('MessageBubble', () => {
   it('renders user text verbatim (not markdown)', () => {
     render(<MessageBubble message={{ id: '1', role: 'user', parts: [{ type: 'text', text: 'hello' }] }} />);
@@ -71,6 +79,36 @@ describe('MessageBubble', () => {
     expect(onApproval).toHaveBeenCalledWith({ id: 'a1', approved: true });
     fireEvent.click(screen.getByText('Deny'));
     expect(onApproval).toHaveBeenCalledWith({ id: 'a1', approved: false });
+  });
+
+  it('renders an image file part as an inline image with click-to-enlarge', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: '7',
+          role: 'user',
+          parts: [{ type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,AAA', filename: 'cans.png' }],
+        }}
+      />
+    );
+    expect(screen.getByTestId('message-image')).toBeTruthy();
+    const imgs = screen.getAllByAltText('cans.png') as HTMLImageElement[];
+    expect(imgs.length).toBeGreaterThan(0);
+    expect(imgs[0]!.getAttribute('src')).toBe('data:image/png;base64,AAA');
+  });
+
+  it('renders a non-image file part as a download link', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: '8',
+          role: 'user',
+          parts: [{ type: 'file', mediaType: 'application/pdf', url: 'https://x/doc.pdf', filename: 'doc.pdf' }],
+        }}
+      />
+    );
+    const link = screen.getByText('doc.pdf') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('https://x/doc.pdf');
   });
 
   it('skips empty text parts', () => {

@@ -2,12 +2,21 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { lastAssistantMessageIsCompleteWithToolCalls, type ChatTransport, type UIMessage } from 'ai';
+import {
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type ChatTransport,
+  type FileUIPart,
+  type UIMessage,
+} from 'ai';
 import { Button } from '@coston/ui/button';
 import { Textarea } from '@coston/ui/textarea';
-import { AlertCircle, ArrowUp, Sparkles, Square } from 'lucide-react';
+import { AlertCircle, ArrowUp, Camera, Loader2, Paperclip, Sparkles, Square, X } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
+import { CameraDialog } from './camera-dialog';
+import { useAttachments, type UploadAttachment } from './use-attachments';
 import type { ToolRenderer } from './types';
+
+export type { ChatAttachment, UploadAttachment } from './use-attachments';
 
 /** A streamed tool call surfaced to the client for execution. */
 export interface AgentToolCall {
@@ -57,6 +66,19 @@ export interface ChatSessionProps<TMessage extends UIMessage = UIMessage> {
   onBusyChange?: (busy: boolean) => void;
   /** Sync the latest messages up to an orchestrator cache when a turn settles. */
   onMessagesSynced?: (id: string, messages: TMessage[]) => void;
+  /**
+   * Image attachments. Enabled by default — picked images are inlined as `data:`
+   * URLs so vision works with no backend. Provide `uploadFile` to store them and
+   * send a reference instead (keeps history lightweight and bytes private).
+   */
+  enableAttachments?: boolean;
+  /** Show a camera-capture button (requires `getUserMedia`). Default true. */
+  enableCamera?: boolean;
+  uploadFile?: UploadAttachment;
+  /** Accepted image mime types. Defaults to jpeg/png/gif/webp (the safe vision set). */
+  acceptedImageTypes?: string[];
+  /** Max bytes per attachment. Default 5 MB. */
+  maxAttachmentBytes?: number;
   assistantTestId?: string;
   viewportTestId?: string;
 }
@@ -82,6 +104,11 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
   onConfigure,
   onBusyChange,
   onMessagesSynced,
+  enableAttachments = true,
+  enableCamera = true,
+  uploadFile,
+  acceptedImageTypes,
+  maxAttachmentBytes,
   assistantTestId,
   viewportTestId,
 }: ChatSessionProps<TMessage>) {
@@ -117,13 +144,24 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
 
   const { messages, sendMessage, status, stop, addToolApprovalResponse } = chat;
   const [input, setInput] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const busy = status === 'submitted' || status === 'streaming';
+
+  const attachmentsOn = enableAttachments && providerReady;
+  const attachments = useAttachments({
+    uploadFile,
+    acceptedTypes: acceptedImageTypes,
+    maxBytes: maxAttachmentBytes,
+    onError,
+  });
+  const { items, add, remove, clear, ready, hasPending } = attachments;
 
   useEffect(() => {
     // `scrollTo` is absent in some environments (e.g. jsdom) — guard the call.
     viewportRef.current?.scrollTo?.({ top: viewportRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, items]);
 
   useEffect(() => onBusyChange?.(busy), [busy, onBusyChange]);
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
@@ -136,20 +174,35 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
     wasBusy.current = busy;
   }, [busy, messages, conversationId, onMessagesSynced]);
 
-  function submit(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || busy || !providerReady) return;
-    sendMessage({ text: trimmed });
+  const canSend = providerReady && !busy && !hasPending && (input.trim().length > 0 || ready.length > 0);
+
+  function submit() {
+    if (!canSend) return;
+    const trimmed = input.trim();
+    const files: FileUIPart[] = ready.map(a => ({
+      type: 'file',
+      url: a.url,
+      mediaType: a.mediaType,
+      ...(a.filename ? { filename: a.filename } : {}),
+      ...(a.providerMetadata ? { providerMetadata: a.providerMetadata } : {}),
+    }));
+    if (files.length > 0) {
+      sendMessage(trimmed ? { text: trimmed, files } : { files });
+    } else {
+      sendMessage({ text: trimmed });
+    }
     setInput('');
+    clear();
+  }
+
+  function pickFiles(list: FileList | null) {
+    const files = Array.from(list ?? []);
+    if (files.length > 0) void add(files);
   }
 
   return (
     <>
-      <div
-        ref={viewportRef}
-        data-testid={viewportTestId}
-        className="min-h-0 flex-1 overflow-y-auto"
-      >
+      <div ref={viewportRef} data-testid={viewportTestId} className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-4 p-4">
           {messages.length === 0 ? (
             <div className="flex flex-col gap-3 pt-6 text-center">
@@ -162,7 +215,10 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
                       key={s}
                       type="button"
                       disabled={!providerReady}
-                      onClick={() => submit(s)}
+                      onClick={() => {
+                        // Send the suggestion immediately (no attachments expected).
+                        if (providerReady && !busy) sendMessage({ text: s });
+                      }}
                       className="rounded-md border px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                     >
                       {s}
@@ -201,50 +257,147 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
         className="border-t p-3"
         onSubmit={e => {
           e.preventDefault();
-          submit(input);
+          submit();
         }}
       >
-        <div className="relative">
+        <div
+          className="rounded-md border focus-within:ring-1 focus-within:ring-ring"
+          onDragOver={attachmentsOn ? e => e.preventDefault() : undefined}
+          onDrop={
+            attachmentsOn
+              ? e => {
+                  e.preventDefault();
+                  pickFiles(e.dataTransfer.files);
+                }
+              : undefined
+          }
+        >
+          {items.length > 0 && (
+            <div className="flex flex-wrap gap-2 p-2" data-testid="attachment-strip">
+              {items.map(a => (
+                <div
+                  key={a.tempId}
+                  data-testid="attachment-thumb"
+                  className="relative size-14 overflow-hidden rounded-md border bg-muted"
+                >
+                  <img src={a.objectUrl} alt={a.filename} className="size-full object-cover" />
+                  {a.status === 'uploading' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <Loader2 className="size-4 animate-spin text-white" />
+                    </div>
+                  )}
+                  {a.status === 'error' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-destructive/70 p-1 text-center text-[9px] leading-tight text-white">
+                      {a.error ?? 'Failed'}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${a.filename}`}
+                    onClick={() => remove(a.tempId)}
+                    className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <Textarea
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                submit(input);
+                submit();
               }
             }}
-            disabled={!providerReady}
-            placeholder={
-              placeholder ?? (providerReady ? 'Ask the agent…' : 'Connect a provider in Settings')
+            onPaste={
+              attachmentsOn
+                ? e => {
+                    const files = Array.from(e.clipboardData.files);
+                    if (files.length > 0) {
+                      e.preventDefault();
+                      void add(files);
+                    }
+                  }
+                : undefined
             }
+            disabled={!providerReady}
+            placeholder={placeholder ?? (providerReady ? 'Ask the agent…' : 'Connect a provider in Settings')}
             rows={2}
-            className="resize-none pr-12"
+            className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
-          {busy ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="secondary"
-              className="absolute bottom-2 right-2 size-8"
-              onClick={() => stop()}
-              aria-label="Stop"
-            >
-              <Square className="size-3.5" />
-            </Button>
-          ) : (
-            <Button
-              type="submit"
-              size="icon"
-              className="absolute bottom-2 right-2 size-8"
-              disabled={!input.trim() || !providerReady}
-              aria-label="Send"
-            >
-              <ArrowUp className="size-4" />
-            </Button>
-          )}
+
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <div className="flex items-center gap-1">
+              {enableAttachments && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="sr-only"
+                    data-testid="attachment-input"
+                    aria-label="Attach images"
+                    onChange={e => {
+                      pickFiles(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 text-muted-foreground"
+                    disabled={!attachmentsOn}
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach images"
+                  >
+                    <Paperclip className="size-4" />
+                  </Button>
+                  {enableCamera && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="size-8 text-muted-foreground"
+                      disabled={!attachmentsOn}
+                      onClick={() => setCameraOpen(true)}
+                      aria-label="Take a photo"
+                    >
+                      <Camera className="size-4" />
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {busy ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="secondary"
+                className="size-8"
+                onClick={() => stop()}
+                aria-label="Stop"
+              >
+                <Square className="size-3.5" />
+              </Button>
+            ) : (
+              <Button type="submit" size="icon" className="size-8" disabled={!canSend} aria-label="Send">
+                <ArrowUp className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </form>
+
+      {enableAttachments && enableCamera && (
+        <CameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onCapture={file => void add([file])} />
+      )}
     </>
   );
 }

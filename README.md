@@ -98,6 +98,25 @@ The same `ToolSet` works for both actuation styles: tools **with** `execute` run
 server-side; tools **without** `execute` are surfaced to the browser via
 `useChat`'s `onToolCall`. The package never names a tool.
 
+### Images work by default
+
+`ChatSession` ships an image composer — attach, camera capture, and paste/drag-drop —
+and `MessageBubble` renders image `file` parts inline (click to enlarge). With no
+configuration, picked images inline as `data:` URLs that vision models read directly.
+
+Two opt-in hooks adapt it to your storage and privacy needs:
+
+- **`uploadFile`** (React, on `ChatSession`) — `(file) => Promise<{ url, mediaType, filename,
+  providerMetadata? }>`. When provided, attachments are uploaded first and sent as a *reference*
+  instead of inlined — keeping history lightweight and bytes private.
+- **`resolveAttachments`** (server, on `createChatRoute`) — `(messages, request) =>
+  Promise<UIMessage[]>`. Transform messages **just before the model call** (e.g. resolve those
+  private references to inline bytes). The returned messages feed the model only; the
+  untransformed messages are what get persisted, so inlined bytes never reach storage and the
+  assistant's reply round-trips unchanged.
+
+Toggle the affordances with `enableAttachments` / `enableCamera` (both default `true`).
+
 ### Agent definition (`defineAgent`)
 
 Define an agent from Markdown instructions, a tool set, and **Skills** — Markdown

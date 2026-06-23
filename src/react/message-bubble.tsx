@@ -1,12 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import { Streamdown } from 'streamdown';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@coston/ui/dialog';
 import { cn } from './cn';
 import type { AgentUIMessage, ToolPartState, ToolRenderer } from './types';
 
 interface TextPart {
   type: 'text';
   text?: string;
+}
+
+/** A file/image attachment part (AI SDK `FileUIPart`). */
+interface FilePart {
+  type: 'file';
+  url?: string;
+  mediaType?: string;
+  filename?: string;
 }
 
 interface ToolPart {
@@ -91,6 +101,32 @@ function ApprovalView({
   );
 }
 
+/** An inline image attachment with click-to-enlarge. */
+function ImagePart({ url, filename }: { url: string; filename?: string }) {
+  const [open, setOpen] = useState(false);
+  const alt = filename ?? 'attachment';
+  return (
+    <>
+      <button
+        type="button"
+        data-testid="message-image"
+        onClick={() => setOpen(true)}
+        className="block max-w-[70%] overflow-hidden rounded-lg border"
+      >
+        <img src={url} alt={alt} className="max-h-64 w-full object-cover" />
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{alt}</DialogTitle>
+          </DialogHeader>
+          <img src={url} alt={alt} className="max-h-[80vh] w-full object-contain" />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function ToolPartView({
   part,
   renderer,
@@ -161,6 +197,24 @@ export function MessageBubble({
               fallbackLabel={name ? humanize(name) : 'this action'}
               onApproval={onApproval}
             />
+          );
+        }
+        if (part.type === 'file') {
+          const file = raw as FilePart;
+          if (!file.url) return null;
+          if (file.mediaType?.startsWith('image/')) {
+            return <ImagePart key={i} url={file.url} filename={file.filename} />;
+          }
+          return (
+            <a
+              key={i}
+              href={file.url}
+              target="_blank"
+              rel="noreferrer"
+              className="max-w-[90%] truncate text-sm text-primary underline"
+            >
+              {file.filename ?? 'Attachment'}
+            </a>
           );
         }
         if (part.type === 'text') {

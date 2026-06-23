@@ -56,6 +56,27 @@ export interface CreateChatRouteOptions<TBody extends ChatRouteBody, TContext> {
   buildTools: (request: ChatRequest<TBody, TContext>) => ToolSet | Promise<ToolSet>;
   /** The system prompt for this turn. */
   buildSystemPrompt: (request: ChatRequest<TBody, TContext>) => string | Promise<string>;
+  /**
+   * Optional: transform the messages **just before they are sent to the model**
+   * (e.g. resolve image/file parts that reference private storage into inline
+   * bytes the provider can read). Receives the raw `UIMessage[]` and the
+   * authorized request, and returns the messages to feed `convertToModelMessages`.
+   *
+   * Images already "just work" without this: `file` parts whose `url` is a
+   * `data:` URL (inline base64) or a public `https://` URL are understood by the
+   * provider as-is. Provide this only when the model needs help reaching the
+   * bytes (auth-gated URLs, app-internal references, format conversion).
+   *
+   * Crucially, the returned messages are used **only** for the model call — the
+   * untransformed `body.messages` are what get persisted, so heavyweight inlined
+   * bytes never reach storage and the user's original parts (and the assistant's
+   * reply) round-trip unchanged. Return a new array/clone — do **not** mutate the
+   * input parts in place, or the inlined bytes will leak into persistence.
+   */
+  resolveAttachments?: (
+    messages: UIMessage[],
+    request: ChatRequest<TBody, TContext>
+  ) => UIMessage[] | Promise<UIMessage[]>;
   /** Persist a completed turn. Provide this **or** `persistence`. */
   saveMessages?: (args: {
     conversationId: string;
@@ -135,15 +156,18 @@ export function createChatRoute<TBody extends ChatRouteBody, TContext>(
       return new Response(message, { status: 400 });
     }
 
-    const [tools, system] = await Promise.all([
+    const [tools, system, modelMessages] = await Promise.all([
       options.buildTools(request),
       options.buildSystemPrompt(request),
+      // The model sees the (optionally) attachment-resolved messages; persistence
+      // below still uses the untransformed `body.messages`.
+      options.resolveAttachments ? options.resolveAttachments(body.messages, request) : body.messages,
     ]);
 
     const result = streamText({
       model,
       system,
-      messages: await convertToModelMessages(body.messages),
+      messages: await convertToModelMessages(modelMessages),
       tools,
       stopWhen: stepCountIs(maxSteps),
     });

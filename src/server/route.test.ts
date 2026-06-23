@@ -117,6 +117,75 @@ describe('createChatRoute', () => {
     expect(opts.buildTools).toHaveBeenCalledOnce();
   });
 
+  it('feeds resolveAttachments output to the model but persists the untransformed messages', async () => {
+    const original = [
+      { id: 'u1', role: 'user', parts: [{ type: 'file', mediaType: 'image/png', url: 'app://doc/1' }] },
+    ] as unknown as UIMessage[];
+    const resolved = [
+      {
+        id: 'u1',
+        role: 'user',
+        parts: [{ type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,AAAA' }],
+      },
+    ] as unknown as UIMessage[];
+    const resolveAttachments = vi.fn(async () => resolved);
+    const { POST } = createChatRoute(baseOptions({ resolveAttachments }));
+    await POST(jsonRequest({ messages: original as unknown as UIMessage[], conversationId: 'c1' }));
+
+    expect(resolveAttachments).toHaveBeenCalledOnce();
+    expect(resolveAttachments).toHaveBeenCalledWith(
+      original,
+      expect.objectContaining({ userId: 'user-1', context: { role: 'owner' } })
+    );
+    // The model receives the resolved clone (the convertToModelMessages mock is identity).
+    const args = streamTextMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(args.messages).toEqual(resolved);
+    // Persistence/replay keeps the original, lightweight parts — inlined bytes never persist.
+    const responseOpts = toResponseMock.mock.calls[0]![0] as { originalMessages: unknown };
+    expect(responseOpts.originalMessages).toEqual(original);
+    expect(responseOpts.originalMessages).not.toEqual(resolved);
+  });
+
+  it('persists the untransformed user turn plus the assistant reply, never the inlined bytes', async () => {
+    // The user turn carries a lightweight reference; resolveAttachments would
+    // inline it for the model only. onFinish must persist the ORIGINAL parts.
+    const original = [
+      { id: 'u1', role: 'user', parts: [{ type: 'file', mediaType: 'image/png', url: 'app://doc/1' }] },
+    ] as unknown as UIMessage[]
+    const resolveAttachments = vi.fn(async () => [
+      { id: 'u1', role: 'user', parts: [{ type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,HEAVY' }] },
+    ] as unknown as UIMessage[])
+    const opts = baseOptions({ resolveAttachments })
+    const { POST } = createChatRoute(opts)
+    await POST(jsonRequest({ messages: original as unknown as UIMessage[], conversationId: 'c1' }))
+
+    const responseOpts = toResponseMock.mock.calls[0]![0] as {
+      originalMessages: { parts: { url: string }[] }[]
+      onFinish: (a: { messages: unknown[]; isAborted: boolean }) => Promise<void>
+    }
+    // The SDK builds onFinish.messages as [...originalMessages, assistantReply].
+    const assistant = { id: 'm1', role: 'assistant', parts: [{ type: 'text', text: 'done' }] }
+    await responseOpts.onFinish({ messages: [...responseOpts.originalMessages, assistant], isAborted: false })
+
+    const saved = (opts.saveMessages as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      messages: { id: string; role: string; parts: { url?: string; text?: string }[] }[]
+    }
+    // User part kept its lightweight reference (no base64), assistant reply retained.
+    expect(saved.messages[0]!.parts[0]!.url).toBe('app://doc/1')
+    expect(JSON.stringify(saved.messages)).not.toContain('HEAVY')
+    expect(saved.messages.at(-1)).toEqual(assistant)
+  })
+
+  it('sends body.messages straight through when no resolveAttachments hook is given', async () => {
+    const messages = [
+      { id: 'u1', role: 'user', parts: [{ type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,AAAA' }] },
+    ] as unknown as UIMessage[];
+    const { POST } = createChatRoute(baseOptions());
+    await POST(jsonRequest({ messages, conversationId: 'c1' }));
+    const args = streamTextMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(args.messages).toEqual(messages);
+  });
+
   it('persists a completed turn but skips an aborted one', async () => {
     const opts = baseOptions();
     const { POST } = createChatRoute(opts);

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 interface CapturedOptions {
   onToolCall?: (a: { toolCall: unknown }) => void;
@@ -59,8 +59,15 @@ describe('ChatSession', () => {
     h.state.messages = [];
     h.state.status = 'ready';
     h.state.lastOptions = undefined;
+    // jsdom lacks object-URL APIs the attachment previews use.
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock');
+    globalThis.URL.revokeObjectURL = vi.fn();
   });
   afterEach(cleanup);
+
+  function pngFile(name = 'cans.png') {
+    return new File(['fake-bytes'], name, { type: 'image/png' });
+  }
 
   it('shows the connect banner and disables input when no provider is ready', () => {
     const onConfigure = vi.fn();
@@ -106,6 +113,64 @@ describe('ChatSession', () => {
 
     opts.onError?.(new Error('boom'));
     expect(onError).toHaveBeenCalledWith('boom');
+  });
+
+  it('uploads an attachment and sends it as a file part referencing the upload', async () => {
+    const uploadFile = vi.fn(async () => ({
+      url: '/api/documents/doc1/url',
+      mediaType: 'image/png',
+      filename: 'cans.png',
+      providerMetadata: { coston: { documentId: 'doc1' } },
+    }));
+    renderSession({ uploadFile });
+
+    fireEvent.change(screen.getByTestId('attachment-input'), { target: { files: [pngFile()] } });
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledOnce());
+    await waitFor(() => expect((screen.getByLabelText('Send') as HTMLButtonElement).disabled).toBe(false));
+
+    fireEvent.click(screen.getByLabelText('Send'));
+    expect(h.sendMessage).toHaveBeenCalledWith({
+      files: [
+        {
+          type: 'file',
+          url: '/api/documents/doc1/url',
+          mediaType: 'image/png',
+          filename: 'cans.png',
+          providerMetadata: { coston: { documentId: 'doc1' } },
+        },
+      ],
+    });
+  });
+
+  it('inlines an attachment as a data URL by default (no uploadFile)', async () => {
+    renderSession();
+    fireEvent.change(screen.getByTestId('attachment-input'), { target: { files: [pngFile()] } });
+    await waitFor(() => expect((screen.getByLabelText('Send') as HTMLButtonElement).disabled).toBe(false));
+
+    fireEvent.change(screen.getByPlaceholderText('Ask the agent…'), { target: { value: 'inventory these' } });
+    fireEvent.click(screen.getByLabelText('Send'));
+
+    expect(h.sendMessage).toHaveBeenCalledTimes(1);
+    const arg = h.sendMessage.mock.calls[0]![0] as { text?: string; files: { type: string; url: string; mediaType: string }[] };
+    expect(arg.text).toBe('inventory these');
+    expect(arg.files).toHaveLength(1);
+    expect(arg.files[0]!.type).toBe('file');
+    expect(arg.files[0]!.mediaType).toBe('image/png');
+    expect(arg.files[0]!.url.startsWith('data:image/png')).toBe(true);
+  });
+
+  it('removes a pending attachment when its remove button is clicked', async () => {
+    renderSession();
+    fireEvent.change(screen.getByTestId('attachment-input'), { target: { files: [pngFile()] } });
+    await waitFor(() => expect(screen.getByTestId('attachment-thumb')).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('Remove cans.png'));
+    expect(screen.queryByTestId('attachment-thumb')).toBeNull();
+  });
+
+  it('hides attachment controls when disabled', () => {
+    renderSession({ enableAttachments: false });
+    expect(screen.queryByTestId('attachment-input')).toBeNull();
+    expect(screen.queryByLabelText('Attach images')).toBeNull();
   });
 
   it('hands a settled turn to onTurnSettled (for local persistence)', () => {
