@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "@coston/design-tokens/tailwind.css";
+@import "@coston/ui/source.css";
+
+/* Tailwind v4 skips node_modules during auto-detection, and the published
+   @coston/ui ships no src/ for its own @source to match — so register both
+   packages' compiled output explicitly. Without this the components' utility
+   classes (bg-muted, sr-only, bg-amber-500/10, …) are never generated. */
+@source "../node_modules/@coston/ui/dist";
+@source "../node_modules/@coston/agent/dist";
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+}
