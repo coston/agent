@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MessageBubble } from './message-bubble';
+
+// No `globals: true`, so RTL's auto-cleanup is off — unmount between tests.
+afterEach(cleanup);
 
 // Streamdown does heavy markdown work; stub it to a plain node for the test.
 vi.mock('streamdown', () => ({
@@ -44,7 +47,7 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Run task…')).toBeTruthy();
   });
 
-  it('honors a custom tool renderer and shows output when complete', () => {
+  it('honors a custom tool renderer and reveals output on expand', () => {
     render(
       <MessageBubble
         message={{
@@ -56,7 +59,59 @@ describe('MessageBubble', () => {
       />
     );
     expect(screen.getByText('Running task')).toBeTruthy();
-    expect(screen.getByText('Added 2 items')).toBeTruthy();
+    // Output is collapsed by default.
+    expect(screen.queryByTestId('tool-output')).toBeNull();
+    fireEvent.click(screen.getByText('Running task'));
+    expect(screen.getByTestId('tool-output').textContent).toContain('Added 2 items');
+  });
+
+  it('renders object output as a JSON code block when expanded', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: '4b',
+          role: 'assistant',
+          parts: [{ type: 'tool-list_tasks', state: 'output-available', output: { count: 2 } }],
+        }}
+      />
+    );
+    fireEvent.click(screen.getByText('List tasks'));
+    expect(screen.getByTestId('tool-output').textContent).toContain('"count": 2');
+  });
+
+  it('uses a custom render() for tool output', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: '4c',
+          role: 'assistant',
+          parts: [{ type: 'tool-list_tasks', state: 'output-available', output: [{ id: 'x' }] }],
+        }}
+        toolRenderers={{
+          list_tasks: {
+            label: 'List tasks',
+            render: output => <span>{(output as unknown[]).length} tasks</span>,
+          },
+        }}
+      />
+    );
+    fireEvent.click(screen.getByText('List tasks'));
+    expect(screen.getByText('1 tasks')).toBeTruthy();
+  });
+
+  it('shows a tool error only when expanded', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: '4d',
+          role: 'assistant',
+          parts: [{ type: 'tool-run_task', state: 'output-error', errorText: 'boom' }],
+        }}
+      />
+    );
+    expect(screen.queryByText('boom')).toBeNull();
+    fireEvent.click(screen.getByText('Run task'));
+    expect(screen.getByText('boom')).toBeTruthy();
   });
 
   it('renders an approval request with working Approve/Deny buttons', () => {

@@ -117,6 +117,31 @@ Two opt-in hooks adapt it to your storage and privacy needs:
 
 Toggle the affordances with `enableAttachments` / `enableCamera` (both default `true`).
 
+### Tool calls render as collapsible cards
+
+`MessageBubble` renders each tool part as a compact card: a spinner + `"{label}…"`
+while running, then a clickable header that expands to reveal the output. Output is
+**collapsed by default** so long results never flood the transcript. The package
+hard-codes no tool — pass `toolRenderers` to override per tool, keyed by tool name:
+
+```tsx
+import { ListIcon } from 'lucide-react';
+
+<ChatSession
+  toolRenderers={{
+    list_tasks: {
+      label: 'List tasks',
+      icon: ListIcon,
+      // Optional: turn raw output into rich UI. Omit it and strings render as
+      // markdown, objects as a JSON code block.
+      render: output => <TaskList tasks={output as Task[]} />,
+    },
+  }}
+/>;
+```
+
+Unknown tools fall back to a humanized name (`list_tasks` → `List tasks`).
+
 ### Agent definition (`defineAgent`)
 
 Define an agent from Markdown instructions, a tool set, and **Skills** — Markdown

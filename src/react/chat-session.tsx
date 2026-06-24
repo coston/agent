@@ -219,7 +219,7 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
                         // Send the suggestion immediately (no attachments expected).
                         if (providerReady && !busy) sendMessage({ text: s });
                       }}
-                      className="rounded-md border px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                      className="rounded-md border border-border px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                     >
                       {s}
                     </button>
@@ -254,14 +254,14 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
       )}
 
       <form
-        className="border-t p-3"
+        className="border-t border-border p-3"
         onSubmit={e => {
           e.preventDefault();
           submit();
         }}
       >
         <div
-          className="rounded-md border focus-within:ring-1 focus-within:ring-ring"
+          className="rounded-md border border-border transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
           onDragOver={attachmentsOn ? e => e.preventDefault() : undefined}
           onDrop={
             attachmentsOn
@@ -278,7 +278,7 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
                 <div
                   key={a.tempId}
                   data-testid="attachment-thumb"
-                  className="relative size-14 overflow-hidden rounded-md border bg-muted"
+                  className="relative size-14 overflow-hidden rounded-md border border-border bg-muted"
                 >
                   <img src={a.objectUrl} alt={a.filename} className="size-full object-cover" />
                   {a.status === 'uploading' && (

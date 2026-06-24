@@ -249,7 +249,7 @@ export function ChatPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1 border-b px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         <SessionSwitcher
           activeTitle={activeTitle}
           conversations={conversations}

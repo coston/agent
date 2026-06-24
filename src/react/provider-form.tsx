@@ -154,7 +154,7 @@ export function ProviderForm({
                 key={h.url}
                 type="button"
                 onClick={() => setBaseUrl(h.url)}
-                className="rounded border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 {h.label}
               </button>

@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 /** The lifecycle states a tool part moves through in a UIMessage. */
 export type ToolPartState =
@@ -23,4 +23,11 @@ export interface ToolRenderer {
   label: string;
   /** Optional leading icon (e.g. a lucide icon). */
   icon?: ComponentType<{ className?: string }>;
+  /**
+   * Optional custom renderer for the tool's output. Receives the raw output
+   * (the tool's return value, type `unknown`) and returns the expanded body.
+   * When omitted, output is rendered as markdown (strings) or a JSON code
+   * block (objects). Use this to turn structured output into rich UI.
+   */
+  render?: (output: unknown) => ReactNode;
 }

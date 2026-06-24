@@ -59,6 +59,25 @@ function Dot() {
   );
 }
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Coerce arbitrary tool output to a markdown string: strings pass through, everything else becomes a JSON code block. */
+function outputToMarkdown(output: unknown): string {
+  if (typeof output === 'string') return output;
+  return '```json\n' + JSON.stringify(output, null, 2) + '\n```';
+}
+
 function ApprovalView({
   part,
   renderer,
@@ -92,7 +111,7 @@ function ApprovalView({
         <button
           type="button"
           onClick={() => onApproval?.({ id: part.approvalId, approved: false })}
-          className="rounded-md border px-2 py-1 hover:bg-accent"
+          className="rounded-md border border-border px-2 py-1 hover:bg-accent"
         >
           Deny
         </button>
@@ -111,7 +130,7 @@ function ImagePart({ url, filename }: { url: string; filename?: string }) {
         type="button"
         data-testid="message-image"
         onClick={() => setOpen(true)}
-        className="block max-w-[70%] overflow-hidden rounded-lg border"
+        className="block max-w-[70%] overflow-hidden rounded-lg border border-border"
       >
         <img src={url} alt={alt} className="max-h-64 w-full object-cover" />
       </button>
@@ -136,24 +155,47 @@ function ToolPartView({
   renderer?: ToolRenderer;
   fallbackLabel: string;
 }) {
+  const [open, setOpen] = useState(false);
   const running = part.state === 'input-streaming' || part.state === 'input-available';
   const label = renderer?.label ?? fallbackLabel;
   const Icon = renderer?.icon;
-  const output = part.state === 'output-available' ? String(part.output ?? '') : null;
+  const hasOutput = part.state === 'output-available' && part.output != null && part.output !== '';
+  const isError = part.state === 'output-error';
+  const expandable = hasOutput || isError;
 
   return (
-    <div
-      data-testid="tool-part"
-      className="flex w-full max-w-[90%] items-start gap-2 rounded-lg border bg-card px-3 py-2 text-xs"
-    >
-      <span className="mt-0.5 shrink-0 text-primary">
-        {running ? <Spinner /> : Icon ? <Icon className="size-3.5" /> : <Dot />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1 font-medium">{running ? `${label}…` : label}</div>
-        {output && <p className="mt-0.5 text-muted-foreground">{output}</p>}
-        {part.state === 'output-error' && <p className="mt-0.5 text-destructive">{part.errorText}</p>}
-      </div>
+    <div data-testid="tool-part" className="w-full max-w-[90%] rounded-lg border border-border bg-card text-xs">
+      <button
+        type="button"
+        disabled={!expandable}
+        aria-expanded={expandable ? open : undefined}
+        onClick={() => setOpen(o => !o)}
+        className={cn(
+          'flex w-full items-center gap-2 px-3 py-2 text-left',
+          expandable && 'cursor-pointer hover:bg-accent/50'
+        )}
+      >
+        <span className="shrink-0 text-primary">
+          {running ? <Spinner /> : Icon ? <Icon className="size-3.5" /> : <Dot />}
+        </span>
+        <span className="min-w-0 flex-1 truncate font-medium">{running ? `${label}…` : label}</span>
+        {expandable && <Chevron open={open} />}
+      </button>
+      {open && hasOutput && (
+        <div
+          data-testid="tool-output"
+          className="max-h-80 overflow-auto border-t border-border px-3 py-2 text-muted-foreground"
+        >
+          {renderer?.render ? (
+            renderer.render(part.output)
+          ) : (
+            <Streamdown className="space-y-2 break-words">{outputToMarkdown(part.output)}</Streamdown>
+          )}
+        </div>
+      )}
+      {open && isError && (
+        <p className="border-t border-border px-3 py-2 text-destructive">{part.errorText}</p>
+      )}
     </div>
   );
 }
