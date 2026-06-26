@@ -205,7 +205,7 @@ function ToolPartView({
           className="max-h-80 overflow-auto border-t border-border px-3 py-2 text-muted-foreground"
         >
           {renderer?.render ? (
-            renderer.render(part.output)
+            renderer.render(part.output, part.input)
           ) : (
             <Streamdown className="space-y-2 break-words">{outputToMarkdown(part.output)}</Streamdown>
           )}

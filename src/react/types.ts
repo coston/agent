@@ -27,11 +27,12 @@ export interface ToolRenderer {
   icon?: ComponentType<{ className?: string }>;
   /**
    * Optional custom renderer for the tool's output. Receives the raw output
-   * (the tool's return value, type `unknown`) and returns the expanded body.
-   * When omitted, output is rendered as markdown (strings) or a JSON code
-   * block (objects). Use this to turn structured output into rich UI.
+   * (the tool's return value, type `unknown`) and the original tool-call `input`
+   * (so an output can be shown alongside what was requested), and returns the
+   * expanded body. When omitted, output is rendered as markdown (strings) or a
+   * JSON code block (objects). Use this to turn structured output into rich UI.
    */
-  render?: (output: unknown) => ReactNode;
+  render?: (output: unknown, input?: unknown) => ReactNode;
   /** Show this tool's output expanded by default instead of collapsed. */
   defaultExpanded?: boolean;
   /**
