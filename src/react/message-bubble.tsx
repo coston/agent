@@ -173,7 +173,7 @@ function ToolPartView({
   renderer?: ToolRenderer;
   fallbackLabel: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(renderer?.defaultExpanded ?? false);
   const running = part.state === 'input-streaming' || part.state === 'input-available';
   const label = renderer?.label ?? fallbackLabel;
   const Icon = renderer?.icon;

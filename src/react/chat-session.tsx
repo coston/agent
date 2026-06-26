@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import {
+  isToolUIPart,
   lastAssistantMessageIsCompleteWithApprovalResponses,
   lastAssistantMessageIsCompleteWithToolCalls,
   type ChatTransport,
@@ -122,9 +123,10 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
     id: conversationId,
     messages: initialMessages,
     transport,
-    // Auto-continue the loop both when client-executed tools have produced
-    // their outputs AND when a needs-approval call has been approved/denied —
-    // the latter resumes the server so an approved tool actually runs.
+    // Auto-continue the loop when client-executed tools have produced outputs,
+    // or when a needs-approval call has been answered (approved → the server runs
+    // the tool; denied → the model gets the denial + any "request changes" reason
+    // and revises). Either way the next turn fires without the user resending.
     sendAutomaticallyWhen: ({ messages }) =>
       lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
       lastAssistantMessageIsCompleteWithApprovalResponses({ messages }),
@@ -188,6 +190,22 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
   function submit() {
     if (!canSend) return;
     const trimmed = input.trim();
+    // If a plan/tool is still awaiting approval, the user typing a change is an
+    // implicit "request changes": a user turn can't follow an unresolved tool
+    // call, so resolve the pending approval(s) as denied with the typed text as
+    // the reason. That single answer auto-resumes the model to revise the plan —
+    // we don't also append a separate user message.
+    const pendingApprovalIds = messages
+      .flatMap(m => m.parts)
+      .flatMap(p => (isToolUIPart(p) && p.state === 'approval-requested' && p.approval?.id ? [p.approval.id] : []));
+    if (pendingApprovalIds.length > 0) {
+      pendingApprovalIds.forEach(id =>
+        addToolApprovalResponse({ id, approved: false, reason: trimmed || undefined })
+      );
+      setInput('');
+      clear();
+      return;
+    }
     const files: FileUIPart[] = ready.map(a => ({
       type: 'file',
       url: a.url,

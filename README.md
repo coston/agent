@@ -166,9 +166,16 @@ call `input` plus `approve`/`deny` callbacks (wired to `addToolApprovalResponse`
 />;
 ```
 
-"Request changes" is just the deny path — the user then types an adjustment and the
-agent re-proposes. The input is read from the `tool-<name>` part's
-`approval-requested` state, so it is always available to the renderer.
+"Request changes" is the deny path: a denial auto-resumes the loop so the model
+revises (typing a change while a plan is pending also denies it, with the typed
+text as the reason — a user turn can't follow an unresolved tool call). The input
+is read from the `tool-<name>` part's `approval-requested` state, so it is always
+available to the renderer. Set `defaultExpanded: true` on a renderer to show the
+tool's output expanded instead of collapsed — handy when a tool's result *is* the
+turn's answer (e.g. an applied plan).
+
+To end the turn on a tool's output instead of making another model call, pass
+`stopWhen` to `createChatRoute` (e.g. `[stepCountIs(12), hasToolCall('apply_plan')]`).
 
 ### Agent definition (`defineAgent`)
 

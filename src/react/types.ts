@@ -32,6 +32,8 @@ export interface ToolRenderer {
    * block (objects). Use this to turn structured output into rich UI.
    */
   render?: (output: unknown) => ReactNode;
+  /** Show this tool's output expanded by default instead of collapsed. */
+  defaultExpanded?: boolean;
   /**
    * Optional custom body for a needs-approval tool call (the AI SDK
    * `needsApproval` flow). Receives the proposed tool-call `input` plus

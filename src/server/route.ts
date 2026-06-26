@@ -3,6 +3,7 @@ import {
   stepCountIs,
   streamText,
   type LanguageModel,
+  type StopCondition,
   type ToolSet,
   type UIMessage,
 } from 'ai';
@@ -98,6 +99,13 @@ export interface CreateChatRouteOptions<TBody extends ChatRouteBody, TContext> {
   conversationIdFrom: (body: TBody) => string | undefined;
   /** Max agent steps per request (`stopWhen: stepCountIs(maxSteps)`). Defaults to 12. */
   maxSteps?: number;
+  /**
+   * Override the loop's stop condition(s). Defaults to `stepCountIs(maxSteps)`.
+   * Pass an array to combine conditions — e.g. stop after a specific tool runs
+   * (`hasToolCall('propose_plan')`) so the loop ends on the tool's output rather
+   * than making another model call. Include a `stepCountIs(...)` cap yourself.
+   */
+  stopWhen?: StopCondition<ToolSet> | StopCondition<ToolSet>[];
   /** Map a stream error to a client-facing message. Defaults to `error.message`. */
   onError?: (error: unknown) => string;
 }
@@ -169,7 +177,7 @@ export function createChatRoute<TBody extends ChatRouteBody, TContext>(
       system,
       messages: await convertToModelMessages(modelMessages),
       tools,
-      stopWhen: stepCountIs(maxSteps),
+      stopWhen: options.stopWhen ?? stepCountIs(maxSteps),
     });
 
     return result.toUIMessageStreamResponse({
