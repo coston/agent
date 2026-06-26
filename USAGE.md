@@ -209,6 +209,8 @@ const agent = defineAgent<{ userId: string; notebookId: string }>({
   skills: [/* { name, description, content } */],
   approvals: ['delete_note'],                    // → AI SDK needsApproval → Approve/Deny UI
 });
+// For a rich approval body (preview a plan/batch instead of the default
+// Approve/Deny prompt), give the tool's renderer a `renderApproval` — see README.
 
 export const { POST } = createChatRoute<Body, { userId: string; notebookId: string }>({
   conversationIdFrom: b => b.conversationId,

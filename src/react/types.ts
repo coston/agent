@@ -4,6 +4,8 @@ import type { ComponentType, ReactNode } from 'react';
 export type ToolPartState =
   | 'input-streaming'
   | 'input-available'
+  | 'approval-requested'
+  | 'approval-responded'
   | 'output-available'
   | 'output-error';
 
@@ -30,4 +32,17 @@ export interface ToolRenderer {
    * block (objects). Use this to turn structured output into rich UI.
    */
   render?: (output: unknown) => ReactNode;
+  /**
+   * Optional custom body for a needs-approval tool call (the AI SDK
+   * `needsApproval` flow). Receives the proposed tool-call `input` plus
+   * `approve`/`deny` callbacks, and returns the full card body — replacing the
+   * default "Approve {label}?" prompt AND its buttons. Use this to preview a
+   * batch/plan and let the user accept or send it back for changes. When
+   * omitted, the default approval prompt is shown.
+   */
+  renderApproval?: (ctx: {
+    input: unknown;
+    approve: () => void;
+    deny: () => void;
+  }) => ReactNode;
 }

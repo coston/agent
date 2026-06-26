@@ -136,6 +136,76 @@ describe('MessageBubble', () => {
     expect(onApproval).toHaveBeenCalledWith({ id: 'a1', approved: false });
   });
 
+  it('renders a rich approval from a tool part in approval-requested state', () => {
+    const onApproval = vi.fn();
+    render(
+      <MessageBubble
+        message={{
+          id: '6b',
+          role: 'assistant',
+          parts: [
+            {
+              type: 'tool-propose_plan',
+              state: 'approval-requested',
+              input: { summary: 'Set up the garage', steps: [{ label: 'Create space "Garage"' }] },
+              approval: { id: 'p1' },
+            },
+          ],
+        }}
+        toolRenderers={{
+          propose_plan: {
+            label: 'Plan',
+            renderApproval: ({ input, approve, deny }) => {
+              const plan = input as { summary: string };
+              return (
+                <div>
+                  <span>{plan.summary}</span>
+                  <button onClick={approve}>Approve &amp; run</button>
+                  <button onClick={deny}>Request changes</button>
+                </div>
+              );
+            },
+          },
+        }}
+        onApproval={onApproval}
+      />
+    );
+    expect(screen.getByText('Set up the garage')).toBeTruthy();
+    fireEvent.click(screen.getByText('Approve & run'));
+    expect(onApproval).toHaveBeenCalledWith({ id: 'p1', approved: true });
+    fireEvent.click(screen.getByText('Request changes'));
+    expect(onApproval).toHaveBeenCalledWith({ id: 'p1', approved: false });
+  });
+
+  it('deduplicates a bare tool-approval-request when a rich tool part covers it', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: '6c',
+          role: 'assistant',
+          parts: [
+            {
+              type: 'tool-propose_plan',
+              state: 'approval-requested',
+              input: { summary: 'Do the thing' },
+              approval: { id: 'dup1' },
+            },
+            { type: 'tool-approval-request', approvalId: 'dup1', toolCall: { toolName: 'propose_plan' } },
+          ],
+        }}
+        toolRenderers={{
+          propose_plan: {
+            label: 'Plan',
+            renderApproval: ({ input }) => <span>{(input as { summary: string }).summary}</span>,
+          },
+        }}
+      />
+    );
+    // Only the rich card renders; the bare request is suppressed.
+    expect(screen.getAllByTestId('tool-approval')).toHaveLength(1);
+    expect(screen.getByText('Do the thing')).toBeTruthy();
+  });
+
   it('renders an image file part as an inline image with click-to-enlarge', () => {
     render(
       <MessageBubble

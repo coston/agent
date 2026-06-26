@@ -142,6 +142,34 @@ import { ListIcon } from 'lucide-react';
 
 Unknown tools fall back to a humanized name (`list_tasks` → `List tasks`).
 
+#### Rich approval bodies (`renderApproval`)
+
+A tool flagged `needsApproval` pauses the agentic loop and renders an Approve/Deny
+card. Add `renderApproval` to a tool's renderer to replace that default prompt with
+a custom body built from the **proposed tool-call input** — e.g. preview a whole
+batch/plan and let the user accept it or send it back for changes. It receives the
+call `input` plus `approve`/`deny` callbacks (wired to `addToolApprovalResponse`):
+
+```tsx
+<ChatSession
+  toolRenderers={{
+    propose_plan: {
+      label: 'Plan',
+      // Pending (awaiting approval): preview the plan + your own buttons.
+      renderApproval: ({ input, approve, deny }) => (
+        <PlanPreview plan={input as Plan} onApprove={approve} onRequestChanges={deny} />
+      ),
+      // Applied (after approval): the tool's return value.
+      render: output => <PlanResult result={output as PlanOutcome} />,
+    },
+  }}
+/>;
+```
+
+"Request changes" is just the deny path — the user then types an adjustment and the
+agent re-proposes. The input is read from the `tool-<name>` part's
+`approval-requested` state, so it is always available to the renderer.
+
 ### Agent definition (`defineAgent`)
 
 Define an agent from Markdown instructions, a tool set, and **Skills** — Markdown

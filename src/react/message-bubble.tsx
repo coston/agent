@@ -22,11 +22,18 @@ interface FilePart {
 interface ToolPart {
   type: string;
   state?: ToolPartState;
+  input?: unknown;
   output?: unknown;
   errorText?: string;
+  /** Present while a `needsApproval` tool call awaits a decision. */
+  approval?: { id: string; approved?: boolean };
 }
 
-/** A pending tool-approval request part (AI SDK `needsApproval` flow). */
+/**
+ * A standalone tool-approval request part (AI SDK `needsApproval` flow). Carries
+ * only ids — the proposed input lives on the sibling `tool-<name>` part in its
+ * `approval-requested` state, which is the path that drives a rich approval.
+ */
 interface ApprovalRequestPart {
   type: 'tool-approval-request';
   approvalId: string;
@@ -79,43 +86,54 @@ function outputToMarkdown(output: unknown): string {
 }
 
 function ApprovalView({
-  part,
+  approvalId,
+  input,
   renderer,
   fallbackLabel,
   onApproval,
 }: {
-  part: ApprovalRequestPart;
+  approvalId: string;
+  /** The proposed tool-call input, when known (present on the tool-part path). */
+  input?: unknown;
   renderer?: ToolRenderer;
   fallbackLabel: string;
   onApproval?: ApprovalResponder;
 }) {
   const label = renderer?.label ?? fallbackLabel;
   const Icon = renderer?.icon;
+  const approve = () => onApproval?.({ id: approvalId, approved: true });
+  const deny = () => onApproval?.({ id: approvalId, approved: false });
   return (
     <div
       data-testid="tool-approval"
       className="flex w-full max-w-[90%] flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs"
     >
-      <div className="flex items-center gap-1 font-medium">
-        {Icon && <Icon className="size-3.5" />}
-        Approve {label}?
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onApproval?.({ id: part.approvalId, approved: true })}
-          className="rounded-md bg-primary px-2 py-1 text-primary-foreground hover:opacity-90"
-        >
-          Approve
-        </button>
-        <button
-          type="button"
-          onClick={() => onApproval?.({ id: part.approvalId, approved: false })}
-          className="rounded-md border border-border px-2 py-1 hover:bg-accent"
-        >
-          Deny
-        </button>
-      </div>
+      {renderer?.renderApproval ? (
+        renderer.renderApproval({ input, approve, deny })
+      ) : (
+        <>
+          <div className="flex items-center gap-1 font-medium">
+            {Icon && <Icon className="size-3.5" />}
+            Approve {label}?
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={approve}
+              className="rounded-md bg-primary px-2 py-1 text-primary-foreground hover:opacity-90"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={deny}
+              className="rounded-md border border-border px-2 py-1 hover:bg-accent"
+            >
+              Deny
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -224,17 +242,29 @@ export function MessageBubble({
   assistantTestId,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  // Approvals are driven by the `tool-<name>` part's `approval-requested` state
+  // (it carries the proposed input). Collect those approval ids so the bare,
+  // input-less `tool-approval-request` part is not rendered as a duplicate card.
+  const richApprovalIds = new Set(
+    message.parts
+      .map(raw => raw as ToolPart)
+      .filter(p => typeof p.type === 'string' && p.type.startsWith('tool-') && p.state === 'approval-requested')
+      .map(p => p.approval?.id)
+      .filter((id): id is string => Boolean(id))
+  );
   return (
     <div className={cn('flex flex-col gap-1.5', isUser ? 'items-end' : 'items-start')}>
       {message.parts.map((raw, i) => {
         const part = raw as { type?: string };
         if (part.type === 'tool-approval-request') {
           const approval = raw as ApprovalRequestPart;
+          // Already shown by the corresponding tool part (with its input).
+          if (richApprovalIds.has(approval.approvalId)) return null;
           const name = approval.toolCall?.toolName ?? '';
           return (
             <ApprovalView
               key={i}
-              part={approval}
+              approvalId={approval.approvalId}
               renderer={name ? toolRenderers?.[name] : undefined}
               fallbackLabel={name ? humanize(name) : 'this action'}
               onApproval={onApproval}
@@ -281,10 +311,25 @@ export function MessageBubble({
         }
         if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
           const name = part.type.slice('tool-'.length);
+          const toolPart = raw as ToolPart;
+          // A `needsApproval` call paused here: render the approval card with the
+          // proposed input (lets a renderer preview a plan before it runs).
+          if (toolPart.state === 'approval-requested' && toolPart.approval?.id) {
+            return (
+              <ApprovalView
+                key={i}
+                approvalId={toolPart.approval.id}
+                input={toolPart.input}
+                renderer={toolRenderers?.[name]}
+                fallbackLabel={humanize(name)}
+                onApproval={onApproval}
+              />
+            );
+          }
           return (
             <ToolPartView
               key={i}
-              part={raw as ToolPart}
+              part={toolPart}
               renderer={toolRenderers?.[name]}
               fallbackLabel={humanize(name)}
             />

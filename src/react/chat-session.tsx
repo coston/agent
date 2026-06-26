@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import {
+  lastAssistantMessageIsCompleteWithApprovalResponses,
   lastAssistantMessageIsCompleteWithToolCalls,
   type ChatTransport,
   type FileUIPart,
@@ -121,7 +122,12 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
     id: conversationId,
     messages: initialMessages,
     transport,
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    // Auto-continue the loop both when client-executed tools have produced
+    // their outputs AND when a needs-approval call has been approved/denied —
+    // the latter resumes the server so an approved tool actually runs.
+    sendAutomaticallyWhen: ({ messages }) =>
+      lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
+      lastAssistantMessageIsCompleteWithApprovalResponses({ messages }),
     onToolCall: onToolCall
       ? ({ toolCall }) =>
           onToolCall({
