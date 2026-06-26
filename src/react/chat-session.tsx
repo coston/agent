@@ -124,12 +124,19 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
     messages: initialMessages,
     transport,
     // Auto-continue the loop when client-executed tools have produced outputs,
-    // or when a needs-approval call has been answered (approved → the server runs
-    // the tool; denied → the model gets the denial + any "request changes" reason
-    // and revises). Either way the next turn fires without the user resending.
-    sendAutomaticallyWhen: ({ messages }) =>
-      lastAssistantMessageIsCompleteWithToolCalls({ messages }) ||
-      lastAssistantMessageIsCompleteWithApprovalResponses({ messages }),
+    // or when a needs-approval call has been *approved* (the server runs it). A
+    // denial does NOT auto-resume: "request changes" / typing pairs the denial
+    // with the user's own message (see `submit`), which is the single turn that
+    // carries the revision — so the typed text lands in the thread as a real
+    // message and the model revises from it.
+    sendAutomaticallyWhen: ({ messages }) => {
+      if (lastAssistantMessageIsCompleteWithToolCalls({ messages })) return true;
+      if (!lastAssistantMessageIsCompleteWithApprovalResponses({ messages })) return false;
+      const last = messages[messages.length - 1];
+      return Boolean(
+        last?.parts.some(p => isToolUIPart(p) && p.state === 'approval-responded' && p.approval?.approved === true)
+      );
+    },
     onToolCall: onToolCall
       ? ({ toolCall }) =>
           onToolCall({
@@ -187,26 +194,20 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
 
   const canSend = providerReady && !busy && !hasPending && (input.trim().length > 0 || ready.length > 0);
 
-  function submit() {
+  async function submit() {
     if (!canSend) return;
     const trimmed = input.trim();
-    // If a plan/tool is still awaiting approval, the user typing a change is an
-    // implicit "request changes": a user turn can't follow an unresolved tool
-    // call, so resolve the pending approval(s) as denied with the typed text as
-    // the reason. That single answer auto-resumes the model to revise the plan —
-    // we don't also append a separate user message.
+    // A user turn can't follow an unresolved tool call, so if a plan/tool is
+    // still awaiting approval, resolve it (denied) BEFORE sending — then the
+    // user's message lands in the thread as a real message and the model revises
+    // from it. `addToolApprovalResponse` is queued; await it so the denial is
+    // applied before `sendMessage` reads the messages (a denial doesn't
+    // auto-resume, so this stays a single request).
     const pendingApprovalIds = messages
       .flatMap(m => m.parts)
       .flatMap(p => (isToolUIPart(p) && p.state === 'approval-requested' && p.approval?.id ? [p.approval.id] : []));
     if (pendingApprovalIds.length > 0) {
-      // Need a typed change to revise; ignore a bare/attachment-only send so we
-      // never accidentally deny the plan or drop a staged attachment.
-      if (trimmed.length === 0) return;
-      pendingApprovalIds.forEach(id => addToolApprovalResponse({ id, approved: false, reason: trimmed }));
-      setInput('');
-      // Keep any staged attachments — a revision is carried by the reason text,
-      // so the user can still send the attachment on a later turn.
-      return;
+      await Promise.all(pendingApprovalIds.map(id => addToolApprovalResponse({ id, approved: false })));
     }
     const files: FileUIPart[] = ready.map(a => ({
       type: 'file',
