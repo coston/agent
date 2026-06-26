@@ -1,6 +1,6 @@
 {
   "name": "@coston/agent",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Reusable, standards-first agent-chat module — a thin wiring layer over the Vercel AI SDK and MCP for building app-scoped LLM copilots.",
   "type": "module",
   "sideEffects": false,
