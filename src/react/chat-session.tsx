@@ -87,6 +87,17 @@ export interface ChatSessionProps<TMessage extends UIMessage = UIMessage> {
 }
 
 /**
+ * The output written to a needs-approval tool when the user requests changes
+ * instead of approving — a normal, position-independent tool result so the turn
+ * stays valid once the user's revision message follows. A renderer can detect
+ * `status: 'changes-requested'` to show a "changes requested" state.
+ */
+const CHANGES_REQUESTED = {
+  status: 'changes-requested',
+  message: 'The user did not approve this plan and is requesting changes. Propose an updated plan based on their next message.',
+} as const;
+
+/**
  * One chat session: the `useChat` wrapper plus message list and composer. Generic
  * over the transport and tool set — server-execute tools just stream; client-side
  * tools are run via the injected `onToolCall` (which receives `addToolOutput`).
@@ -158,7 +169,27 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
   });
   addToolOutputRef.current = chat.addToolOutput as unknown as AddToolOutput;
 
-  const { messages, sendMessage, status, stop, addToolApprovalResponse } = chat;
+  const { messages, sendMessage, setMessages, status, stop, addToolApprovalResponse } = chat;
+
+  // Resolve any approval-pending tool parts (optionally just one by approval id)
+  // to a normal "changes-requested" output. We do this instead of denying via
+  // the approval mechanism because a denial is only honored by the server when
+  // its approval-response is the LAST message — once the user's own message is
+  // appended (a revision), that no longer holds and the tool call would be left
+  // without a result. A real tool output is position-independent, so the turn
+  // stays valid with the user's message after it. `setMessages` doesn't auto-send.
+  function dismissPendingApprovals(matches: (approvalId: string) => boolean) {
+    setMessages(prev =>
+      prev.map(m => ({
+        ...m,
+        parts: m.parts.map(p =>
+          isToolUIPart(p) && p.state === 'approval-requested' && p.approval?.id && matches(p.approval.id)
+            ? { ...p, state: 'output-available' as const, output: CHANGES_REQUESTED }
+            : p
+        ),
+      })) as typeof prev
+    );
+  }
   const [input, setInput] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   // Full-screen preview of a tapped attachment thumbnail.
@@ -194,21 +225,17 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
 
   const canSend = providerReady && !busy && !hasPending && (input.trim().length > 0 || ready.length > 0);
 
-  async function submit() {
+  function submit() {
     if (!canSend) return;
     const trimmed = input.trim();
-    // A user turn can't follow an unresolved tool call, so if a plan/tool is
-    // still awaiting approval, resolve it (denied) BEFORE sending — then the
-    // user's message lands in the thread as a real message and the model revises
-    // from it. `addToolApprovalResponse` is queued; await it so the denial is
-    // applied before `sendMessage` reads the messages (a denial doesn't
-    // auto-resume, so this stays a single request).
-    const pendingApprovalIds = messages
-      .flatMap(m => m.parts)
-      .flatMap(p => (isToolUIPart(p) && p.state === 'approval-requested' && p.approval?.id ? [p.approval.id] : []));
-    if (pendingApprovalIds.length > 0) {
-      await Promise.all(pendingApprovalIds.map(id => addToolApprovalResponse({ id, approved: false })));
-    }
+    // If a plan/tool is still awaiting approval, the user typing is a "request
+    // changes": resolve the pending approval to a normal tool output first (so a
+    // user turn can validly follow it), then send the user's message — it lands
+    // in the thread as a real message and the model revises from it.
+    const hasPendingApproval = messages.some(m =>
+      m.parts.some(p => isToolUIPart(p) && p.state === 'approval-requested')
+    );
+    if (hasPendingApproval) dismissPendingApprovals(() => true);
     const files: FileUIPart[] = ready.map(a => ({
       type: 'file',
       url: a.url,
@@ -263,7 +290,9 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
                 key={m.id}
                 message={m}
                 toolRenderers={toolRenderers}
-                onApproval={({ id, approved }) => addToolApprovalResponse({ id, approved })}
+                onApproval={({ id, approved }) =>
+                  approved ? addToolApprovalResponse({ id, approved: true }) : dismissPendingApprovals(a => a === id)
+                }
                 assistantTestId={assistantTestId}
               />
             ))
