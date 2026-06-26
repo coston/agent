@@ -199,11 +199,13 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
       .flatMap(m => m.parts)
       .flatMap(p => (isToolUIPart(p) && p.state === 'approval-requested' && p.approval?.id ? [p.approval.id] : []));
     if (pendingApprovalIds.length > 0) {
-      pendingApprovalIds.forEach(id =>
-        addToolApprovalResponse({ id, approved: false, reason: trimmed || undefined })
-      );
+      // Need a typed change to revise; ignore a bare/attachment-only send so we
+      // never accidentally deny the plan or drop a staged attachment.
+      if (trimmed.length === 0) return;
+      pendingApprovalIds.forEach(id => addToolApprovalResponse({ id, approved: false, reason: trimmed }));
       setInput('');
-      clear();
+      // Keep any staged attachments — a revision is carried by the reason text,
+      // so the user can still send the attachment on a later turn.
       return;
     }
     const files: FileUIPart[] = ready.map(a => ({
