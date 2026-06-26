@@ -88,7 +88,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
 }
 
 describe('ChatPanel', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => sessionStorage.clear());
   afterEach(cleanup);
 
   it('renders the active session via the render prop', () => {

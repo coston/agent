@@ -101,7 +101,13 @@ export interface ChatPanelProps {
   providerLabel?: string;
   /** Fallback title for an untitled session. Defaults to "New chat". */
   defaultTitle?: string;
-  /** localStorage key prefix for the last-open session. Defaults to "coston-agent:active-conversation". */
+  /**
+   * sessionStorage key prefix for the last-open session. Defaults to
+   * "coston-agent:active-conversation". Scoped to the browser session: it
+   * survives reloads and in-tab navigation but is cleared when the tab/window
+   * closes, so opening the app in a new web session starts fresh rather than
+   * resuming the previous conversation.
+   */
   storageKeyPrefix?: string;
   /** Surface a user-facing error (e.g. a toast). */
   onError?: (message: string) => void;
@@ -147,7 +153,7 @@ export function ChatPanel({
   const persistActive = useCallback(
     (id: string) => {
       try {
-        localStorage.setItem(storageKey, id);
+        sessionStorage.setItem(storageKey, id);
       } catch {
         // ignore storage failures (private mode, etc.)
       }
@@ -177,12 +183,14 @@ export function ChatPanel({
     [activeId, cache, loadMessages, persistActive]
   );
 
-  // On mount, continue whichever session this browser had open last (if it still
-  // exists). Runs once.
+  // On mount, continue whichever session this browser session had open last (if
+  // it still exists). sessionStorage is cleared on tab/window close, so a new
+  // web session falls through to the server-provided active conversation rather
+  // than resuming the previous one. Runs once.
   useEffect(() => {
     const stored = (() => {
       try {
-        return localStorage.getItem(storageKey);
+        return sessionStorage.getItem(storageKey);
       } catch {
         return null;
       }
