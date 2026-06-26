@@ -330,7 +330,7 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
             className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
 
-          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+          <div className="flex items-center justify-between gap-2 px-2 pb-3">
             <div className="flex items-center gap-1">
               {enableAttachments && (
                 <>
