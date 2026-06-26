@@ -167,6 +167,29 @@ describe('ChatSession', () => {
     expect(screen.queryByTestId('attachment-thumb')).toBeNull();
   });
 
+  it('opens a full-screen preview when a thumbnail is clicked, and closes it', async () => {
+    renderSession();
+    fireEvent.change(screen.getByTestId('attachment-input'), { target: { files: [pngFile()] } });
+    await waitFor(() => expect(screen.getByTestId('attachment-thumb')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('attachment-thumb').querySelector('img')!);
+    const preview = await screen.findByTestId('attachment-preview');
+    expect(preview.querySelector('img')).toBeTruthy();
+
+    // Tapping the previewed image dismisses it.
+    fireEvent.click(preview.querySelector('img')!);
+    await waitFor(() => expect(screen.queryByTestId('attachment-preview')).toBeNull());
+  });
+
+  it('lays attachments out in a single horizontally-scrolling row', async () => {
+    renderSession();
+    fireEvent.change(screen.getByTestId('attachment-input'), { target: { files: [pngFile()] } });
+    await waitFor(() => expect(screen.getByTestId('attachment-strip')).toBeTruthy());
+    const strip = screen.getByTestId('attachment-strip');
+    expect(strip.className).toContain('overflow-x-auto');
+    expect(strip.className).not.toContain('flex-wrap');
+  });
+
   it('hides attachment controls when disabled', () => {
     renderSession({ enableAttachments: false });
     expect(screen.queryByTestId('attachment-input')).toBeNull();

@@ -10,6 +10,7 @@ import {
 } from 'ai';
 import { Button } from '@coston/ui/button';
 import { Textarea } from '@coston/ui/textarea';
+import { Dialog, DialogContent, DialogTitle } from '@coston/ui/dialog';
 import { AlertCircle, ArrowUp, Camera, Loader2, Paperclip, Sparkles, Square, X } from 'lucide-react';
 import { MessageBubble } from './message-bubble';
 import { CameraDialog } from './camera-dialog';
@@ -145,6 +146,8 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
   const { messages, sendMessage, status, stop, addToolApprovalResponse } = chat;
   const [input, setInput] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
+  // Full-screen preview of a tapped attachment thumbnail.
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const busy = status === 'submitted' || status === 'streaming';
@@ -273,14 +276,19 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
           }
         >
           {items.length > 0 && (
-            <div className="flex flex-wrap gap-2 p-2" data-testid="attachment-strip">
+            <div className="flex gap-2 overflow-x-auto p-2" data-testid="attachment-strip">
               {items.map(a => (
                 <div
                   key={a.tempId}
                   data-testid="attachment-thumb"
-                  className="relative size-14 overflow-hidden rounded-md border border-border bg-muted"
+                  className="relative size-14 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
                 >
-                  <img src={a.objectUrl} alt={a.filename} className="size-full object-cover" />
+                  <img
+                    src={a.objectUrl}
+                    alt={a.filename}
+                    onClick={() => setPreviewSrc(a.objectUrl)}
+                    className="size-full cursor-zoom-in object-cover"
+                  />
                   {a.status === 'uploading' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                       <Loader2 className="size-4 animate-spin text-white" />
@@ -330,7 +338,7 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
             className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
           />
 
-          <div className="flex items-center justify-between gap-2 px-2 pb-3">
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
             <div className="flex items-center gap-1">
               {enableAttachments && (
                 <>
@@ -398,6 +406,25 @@ export function ChatSession<TMessage extends UIMessage = UIMessage>({
       {enableAttachments && enableCamera && (
         <CameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onCapture={file => void add([file])} />
       )}
+
+      {/* Full-screen preview of a tapped thumbnail. Exit via the dialog's
+          built-in close, Escape, the backdrop, or tapping the image. */}
+      <Dialog open={Boolean(previewSrc)} onOpenChange={open => !open && setPreviewSrc(null)}>
+        <DialogContent
+          data-testid="attachment-preview"
+          className="w-auto max-w-none border-0 bg-transparent p-0 shadow-none"
+        >
+          <DialogTitle className="sr-only">Image preview</DialogTitle>
+          {previewSrc && (
+            <img
+              src={previewSrc}
+              alt="Attachment preview"
+              onClick={() => setPreviewSrc(null)}
+              className="max-h-[85vh] max-w-[92vw] cursor-zoom-out rounded-md object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
